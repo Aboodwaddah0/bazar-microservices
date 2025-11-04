@@ -16,13 +16,11 @@ const book=info.data;
       return res.status(400).json({ message: ' out of stock' });
 
  await axios.put(`http://localhost:3001/update/${id}`, {
-      quantity: book.quantity - 1
-    });
+      quantity: book.quantity - 1 });
 
-     orders.push({ id: book.id, title: book.title, price: book.price });
-    fs.writeFileSync('orders.json', JSON.stringify(orders, null, 2));
- res.json({ message: ` Bought book: ${book.title}` });
+  res.json({ message: `Bought book: ${book.title}`, newQuantity: book.quantity - 1 });
 }
+
 
 catch (err) {
     res.status(500).json({ error: 'Error processing purchase' });
