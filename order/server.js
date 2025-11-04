@@ -1,9 +1,8 @@
 const express=require('express');
 const axios=require('axios');
 const app=express();
-const fs = require('fs');
 
-let order=[];
+
 app.post('/purchase/:id',async(req,res)=>
     {
  const id=req.params.id;
