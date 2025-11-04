@@ -1,27 +1,53 @@
 import express from "express";
-import fs from "fs/promises";
-import path from "path";
+import sqlite3 from "sqlite3";
+import { open } from "sqlite";
+
+// open connection to SQLite database
+const dbPromise = open({
+  filename: "./catalog.db",
+  driver: sqlite3.Database,
+});
+
+async function initDB() {
+  const db = await dbPromise;
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS books (
+      id INTEGER PRIMARY KEY,
+      title TEXT,
+      quantity INTEGER,
+      price REAL,
+      topic TEXT
+    )
+  `);
+}
+initDB();
+
+async function seedDB() {
+  const db = await dbPromise;
+  const count = await db.get("SELECT COUNT(*) as c FROM books");
+  if (count.c === 0) {
+    await db.run("INSERT INTO books (title, quantity, price, topic) VALUES (?, ?, ?, ?)", "How to get a good grade in DOS in 40 minutes a day", 5, 20, "distributed systems");
+    await db.run("INSERT INTO books (title, quantity, price, topic) VALUES (?, ?, ?, ?)", "RPCs for Noobs", 5, 25, "distributed systems");
+    await db.run("INSERT INTO books (title, quantity, price, topic) VALUES (?, ?, ?, ?)", "Xen and the Art of Surviving Undergraduate School", 5, 15, "undergraduate school");
+    await db.run("INSERT INTO books (title, quantity, price, topic) VALUES (?, ?, ?, ?)", "Cooking for the Impatient Undergrad", 5, 12, "undergraduate school");
+  }
+}
+seedDB();
+
+
 
 const app = express();
 app.use(express.json());
-
-const DATA_FILE = path.join(process.cwd(), "catalog.json");
-
-async function readCatalog() {
-  const txt = await fs.readFile(DATA_FILE, "utf8");
-  return JSON.parse(txt);
-}
-async function writeCatalog(data) {
-  await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
-}
 
 // /search/:topic
 app.get("/search/:topic", async (req, res) => {
   try {
     const topic = decodeURIComponent(req.params.topic).toLowerCase();
-    const catalog = await readCatalog();
-    const items = catalog.filter(item => item.topic.toLowerCase() === topic)
-      .map(({ id, title }) => ({ id, title }));
+    const db = await dbPromise;
+    const items = await db.all(
+      "SELECT id, title FROM books WHERE LOWER(topic) = ?",
+      topic
+    );
     res.json(items);
   } catch (err) {
     console.error(err);
@@ -29,19 +55,21 @@ app.get("/search/:topic", async (req, res) => {
   }
 });
 
+
 // /info/:id
 app.get("/info/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const catalog = await readCatalog();
-    const item = catalog.find(it => it.id === id);
+    const db = await dbPromise;
+    const item = await db.get("SELECT * FROM books WHERE id = ?", id);
     if (!item) return res.status(404).json({ error: "Item not found" });
-    res.json({ title: item.title, quantity: item.quantity, price: item.price, topic: item.topic });
+    res.json(item);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal error" });
   }
 });
+
 
 // /update/:id
 
@@ -51,31 +79,39 @@ app.put("/update/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { quantity_delta, price, set_quantity } = req.body || {};
-    const catalog = await readCatalog();
-    const idx = catalog.findIndex(it => it.id === id);
-    if (idx === -1) return res.status(404).json({ error: "Item not found" });
+    const db = await dbPromise;
+
+    const item = await db.get("SELECT * FROM books WHERE id = ?", id);
+    if (!item) return res.status(404).json({ error: "Item not found" });
+
+    let newQuantity = item.quantity;
 
     if (typeof quantity_delta === "number") {
-      catalog[idx].quantity += quantity_delta;
-      if (catalog[idx].quantity < 0) {
-        return res.status(400).json({ error: "Not enough stock" });
-      }
-    }
-    if (typeof set_quantity === "number") {
-      catalog[idx].quantity = set_quantity;
-    }
-    if (typeof price === "number") {
-      catalog[idx].price = price;
+      newQuantity += quantity_delta;
+      if (newQuantity < 0) return res.status(400).json({ error: "Not enough stock" });
     }
 
-    await writeCatalog(catalog);
-    res.json({ success: true, item: catalog[idx] });
+    if (typeof set_quantity === "number") newQuantity = set_quantity;
+
+    const newPrice = typeof price === "number" ? price : item.price;
+
+    await db.run("UPDATE books SET quantity = ?, price = ? WHERE id = ?", newQuantity, newPrice, id);
+
+    const updated = await db.get("SELECT * FROM books WHERE id = ?", id);
+    res.json({ success: true, item: updated });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal error" });
   }
 });
 
+
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Catalog Service running on port ${PORT}`));
+
+(async () => {
+  await initDB();
+  await seedDB();
+  app.listen(PORT, () => console.log(`Catalog Service running on port ${PORT}`));
+})();
+
      
