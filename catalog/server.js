@@ -106,7 +106,7 @@ app.put("/update/:id", async (req, res) => {
 });
 
 
-const PORT = process.env.PORT || 3001;
+const PORT = 3001;
 
 (async () => {
   await initDB();
