@@ -1,11 +1,12 @@
-import express from "express";
-import axios from "axios";
+const express = require("express");
+const axios = require("axios");
+
 
 const app = express();
 app.use(express.json());
 
-const CATALOG_URL = "http://localhost:3001";
-const ORDER_URL = "http://localhost:3002";
+const CATALOG_URL = "http://catalog:3001";
+const ORDER_URL = "http://order:3002";
 
 // GET /search/:topic -> proxy to catalog search
 app.get("/search/:topic", async (req, res) => {
