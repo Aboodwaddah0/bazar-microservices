@@ -7,6 +7,7 @@ async function test(n) {
     const start = Date.now();
     await axios.get("http://localhost:3000/info/1");
     total += Date.now() - start;
+    console.log(total);
   }
 
   console.log("Average response time:", total / n, "ms");
@@ -14,4 +15,4 @@ async function test(n) {
 
 
 
-test(50);
+test(10);

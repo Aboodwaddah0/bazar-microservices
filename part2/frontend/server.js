@@ -48,37 +48,60 @@ function updateCache(key, value) {
   }
 }
 
-// Read only request (load balanced)
+// read only request (load balanced)
 app.get("/search/:topic", async (req, res) => {
   const catalog = nextCatalog();
   const r = await axios.get(`${catalog}/search/${req.params.topic}`);
   res.json(r.data);
 });
 
+
 // cached read request
 app.get("/info/:id", async (req, res) => {
   const id = req.params.id;
-
+const start = Date.now();
   if (cache.has(id)) {
-    return res.json(cache.get(id)); // Cache HIT
+     const duration = Date.now() - start;
+   console.log(`CACHE HIT | Book ${id} | Time = ${duration} ms`);
+    return res.json(cache.get(id)); // cache hit
   }
-
+    console.log("CACHE MISS for book", id);
   const catalog = nextCatalog();
   const r = await axios.get(`${catalog}/info/${id}`);
-  updateCache(id, r.data);           // Cache MISS
+  updateCache(id, r.data); 
+  const duration = Date.now() - start;
+  console.log(`CACHE MISS | Book ${id} | Time = ${duration} ms`);// cache miss
   res.json(r.data);
 });
+
 
 // write request forwarded to order replica
 app.post("/purchase/:id", async (req, res) => {
-  const order = nextOrder();
-  const r = await axios.post(`${order}/purchase/${req.params.id}`);
-  res.json(r.data);
+  try {
+    const order = nextOrder();
+    const r = await axios.post(`${order}/purchase/${req.params.id}`);
+    res.json(r.data);
+  } catch (err) {
+    if (err.response) {
+
+      return res.status(err.response.status).json(err.response.data);
+    }
+    res.status(500).json({ error: "Purchase failed" });
+  }
 });
+
 
 // cache invalidation after write operation
 app.post("/invalidate/:id", (req, res) => {
-  cache.delete(req.params.id);
+  const id = req.params.id;
+
+  if (cache.has(id)) {
+    console.log("CACHE INVALIDATED for book", id);
+    cache.delete(id);
+  } else {
+    console.log("INVALIDATE received, but book not in cache", id);
+  }
+
   res.json({ success: true });
 });
 
