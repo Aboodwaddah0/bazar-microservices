@@ -59,18 +59,15 @@ app.get("/search/:topic", async (req, res) => {
 // cached read request
 app.get("/info/:id", async (req, res) => {
   const id = req.params.id;
-const start = Date.now();
   if (cache.has(id)) {
-     const duration = Date.now() - start;
-   console.log(`CACHE HIT | Book ${id} | Time = ${duration} ms`);
+    console.log("CACHE HIT for book", id);
     return res.json(cache.get(id)); // cache hit
   }
     console.log("CACHE MISS for book", id);
   const catalog = nextCatalog();
   const r = await axios.get(`${catalog}/info/${id}`);
   updateCache(id, r.data); 
-  const duration = Date.now() - start;
-  console.log(`CACHE MISS | Book ${id} | Time = ${duration} ms`);// cache miss
+  
   res.json(r.data);
 });
 
